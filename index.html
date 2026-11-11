@@ -43,7 +43,9 @@
   header.barra { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--accent); color: #fff; min-height: 58px; }
   header.barra h2 { margin: 0; font-size: 17px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   header.barra small { display: block; font-weight: 400; opacity: .85; font-size: 12px; }
-  header.barra button { background: transparent; border: 0; color: #fff; padding: 6px 8px; border-radius: 6px; }
+  header.barra button { background: transparent; border: 0; color: #fff; padding: 6px 8px; border-radius: 6px; white-space: nowrap; font-size: 13px; }
+  header.barra h2 { min-width: 0; }
+  #alertas, #botGlobal { background: rgb(255 255 255 / .18); }
   #buscar { margin: 8px 12px; padding: 9px 12px; border-radius: 8px; border: 0; background: var(--bg); color: var(--text); }
   #convs { flex: 1; overflow-y: auto; }
   .conv { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
@@ -76,6 +78,24 @@
   #btnEnviar { border: 0; background: var(--accent); color: #fff; border-radius: 50%; width: 44px; height: 44px; flex: none; font-size: 18px; }
   #btnEnviar:disabled { opacity: .5; cursor: default; }
 
+  /* Pedidos pendientes */
+  #pedidos { border-bottom: 3px solid var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--panel)); max-height: 45%; overflow-y: auto; flex: none; }
+  #pedidos h3 { margin: 0; padding: 10px 16px 6px; font-size: 14px; color: var(--danger); display: flex; justify-content: space-between; align-items: center; }
+  .pedido { padding: 8px 16px 10px; border-top: 1px solid var(--line); }
+  .pedido .cab { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+  .pedido .cab span:last-child { font-weight: 400; color: var(--muted); font-size: 12px; flex: none; }
+  .pedido .motivo { font-size: 12px; color: var(--danger); font-weight: 600; }
+  .pedido .det { font-size: 13px; color: var(--muted); white-space: pre-wrap; max-height: 4.2em; overflow: hidden; margin: 2px 0 6px; }
+  .pedido.urgente .cab span:last-child { color: var(--danger); font-weight: 700; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 5px 10px; border-radius: 6px; font-size: 13px; }
+  .btn.ok { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #bannerPedido { background: color-mix(in srgb, var(--danger) 12%, var(--panel)); color: var(--text); padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13.5px; border-bottom: 1px solid var(--line); }
+  #botGlobal.apagado { background: var(--danger) !important; }
+  #alertas.pendiente { animation: latido 1.2s infinite; }
+  @keyframes latido { 50% { opacity: .45; } }
+  #avisoApagado { background: var(--danger); color: #fff; padding: 6px 16px; font-size: 13px; }
+
   @media (max-width: 760px) {
     #app { grid-template-columns: minmax(0, 1fr); }
     #app.viendo-chat #lista { display: none; }
@@ -102,8 +122,12 @@
   <aside id="lista">
     <header class="barra">
       <h2>Farmacruz<small id="estadoConexion">Conectado</small></h2>
+      <button id="alertas" class="pendiente" title="Activar sonido y notificaciones de pedidos">🔔 Activar alertas</button>
+      <button id="botGlobal" title="Encender o apagar el bot para todos los clientes">🤖 ON</button>
       <button id="salir" title="Cerrar sesión">Salir</button>
     </header>
+    <div id="avisoApagado" class="oculto">⛔ Bot apagado: nadie recibe respuestas automáticas. Atiende desde aquí.</div>
+    <div id="pedidos" class="oculto"></div>
     <input id="buscar" type="search" placeholder="Buscar por nombre o número">
     <div id="convs"></div>
     <div id="vacio" class="oculto">Todavía no hay conversaciones.</div>
@@ -117,6 +141,7 @@
         <h2 id="chatNombre">—<small id="chatTel"></small></h2>
         <button id="toggleBot"></button>
       </header>
+      <div id="bannerPedido" class="oculto"><span id="bannerTexto">🛒 Pedido pendiente</span><button class="btn ok" id="bannerAtender">✅ Atendido</button></div>
       <div id="mensajes"></div>
       <div id="aviso" class="oculto"></div>
       <form id="enviar">
@@ -168,12 +193,15 @@ const inicial = (c) => (c.nombre || "?").trim().charAt(0).toUpperCase() || "#";
 // ---------- Lista de conversaciones ----------
 async function cargarConversaciones() {
   try {
-    const { conversaciones: lista } = await api({ accion: "conversaciones" });
-    conversaciones = lista;
+    const d = await api({ accion: "conversaciones" });
+    conversaciones = d.conversaciones;
+    botApagado = !!d.bot_apagado;
     $("estadoConexion").textContent = "Actualizado " + hora(new Date());
     pintarLista();
-    const sinLeer = lista.reduce((n, c) => n + Number(c.no_leidos || 0), 0);
-    document.title = (sinLeer ? `(${sinLeer}) ` : "") + "Bandeja Farmacruz";
+    revisarPedidos(d.pedidos || []);
+    pintarBotGlobal();
+    const sinLeer = conversaciones.reduce((n, c) => n + Number(c.no_leidos || 0), 0);
+    document.title = (pedidos.length ? `🛒${pedidos.length} ` : "") + (sinLeer ? `(${sinLeer}) ` : "") + "Bandeja Farmacruz";
   } catch (e) {
     if (e.message !== "401") $("estadoConexion").textContent = "Sin conexión, reintentando…";
   }
@@ -201,6 +229,109 @@ $("convs").addEventListener("click", (e) => {
 });
 $("buscar").addEventListener("input", pintarLista);
 
+// ---------- Pedidos pendientes y alertas ----------
+let pedidos = [];
+let botApagado = false;
+const vistos = new Set();
+let primeraCarga = true;
+let audio = null;           // se crea al pulsar "Activar alertas" (los navegadores lo exigen)
+let ultimoRepique = 0;
+const URGENTE_MIN = 3;      // minutos sin atender para volver a sonar
+
+const minutosDesde = (f) => Math.floor((Date.now() - new Date(f).getTime()) / 60000);
+const hace = (f) => { const m = minutosDesde(f); return m < 1 ? "ahora" : m < 60 ? `hace ${m} min` : `hace ${Math.floor(m / 60)} h ${m % 60} min`; };
+
+function revisarPedidos(lista) {
+  pedidos = lista;
+  const nuevos = lista.filter((p) => !vistos.has(p.id));
+  nuevos.forEach((p) => vistos.add(p.id));
+  if (nuevos.length && !primeraCarga) alertar(nuevos);
+  else if (lista.some((p) => minutosDesde(p.creado) >= URGENTE_MIN) && Date.now() - ultimoRepique > 60000) {
+    ultimoRepique = Date.now(); sonar(1); // recordatorio cada minuto mientras haya pedidos sin atender
+  }
+  primeraCarga = false;
+  pintarPedidos();
+  pintarBanner();
+}
+
+function pintarPedidos() {
+  const caja = $("pedidos");
+  caja.classList.toggle("oculto", pedidos.length === 0);
+  caja.innerHTML = `<h3><span>🛒 Pedidos pendientes (${pedidos.length})</span></h3>` + pedidos.map((p) => `
+    <div class="pedido ${minutosDesde(p.creado) >= URGENTE_MIN ? "urgente" : ""}">
+      <div class="cab"><span>${esc(p.nombre || fmtTel(p.telefono))}</span><span>${hace(p.creado)}</span></div>
+      <div class="motivo">${esc(p.motivo)}</div>
+      <div class="det">${esc(p.detalle)}</div>
+      <div class="btns"><button class="btn" data-abrir="${esc(p.telefono)}">💬 Abrir chat</button><button class="btn ok" data-atender="${p.id}">✅ Atendido</button></div>
+    </div>`).join("");
+}
+
+$("pedidos").addEventListener("click", async (e) => {
+  const abrirTel = e.target.closest("[data-abrir]")?.dataset.abrir;
+  const atenderId = e.target.closest("[data-atender]")?.dataset.atender;
+  if (abrirTel) abrir(abrirTel);
+  if (atenderId) await atender(atenderId);
+});
+
+async function atender(id) {
+  try { await api({ accion: "atender", id: Number(id) }); await cargarConversaciones(); await cargarMensajes(); }
+  catch (e) { if (e.message !== "401") alert(e.message); }
+}
+
+function pintarBanner() {
+  const p = actual && pedidos.find((x) => x.telefono === actual);
+  $("bannerPedido").classList.toggle("oculto", !p);
+  if (p) { $("bannerTexto").textContent = `🛒 Pedido pendiente (${p.motivo}, ${hace(p.creado)}). Al marcarlo atendido, el bot vuelve a responderle.`; $("bannerAtender").dataset.id = p.id; }
+}
+$("bannerAtender").addEventListener("click", (e) => atender(e.currentTarget.dataset.id));
+
+function sonar(veces = 3) {
+  if (!audio) return;
+  for (let i = 0; i < veces; i++) {
+    const t = audio.currentTime + i * 0.35, o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.value = i % 2 ? 660 : 880; o.type = "sine";
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.4, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.32);
+  }
+  try { navigator.vibrate?.([200, 100, 200]); } catch {}
+}
+
+function alertar(nuevos) {
+  sonar(3);
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      for (const p of nuevos) {
+        const n = new Notification("🛒 Nuevo pedido – " + (p.nombre || fmtTel(p.telefono)), { body: `${p.motivo}\n${p.detalle}`.slice(0, 180), tag: "pedido-" + p.id, requireInteraction: true });
+        n.onclick = () => { window.focus(); abrir(p.telefono); n.close(); };
+      }
+    }
+  } catch {}
+}
+
+$("alertas").addEventListener("click", async () => {
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); await audio.resume(); } catch {}
+  try { if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission(); } catch {}
+  sonar(2);
+  const notif = "Notification" in window && Notification.permission === "granted";
+  $("alertas").classList.remove("pendiente");
+  $("alertas").textContent = notif ? "🔔 Alertas activas" : "🔔 Solo sonido";
+  $("alertas").title = notif ? "Sonido y notificaciones activos" : "Notificaciones bloqueadas por el navegador: solo sonará mientras la página esté abierta";
+});
+
+function pintarBotGlobal() {
+  $("botGlobal").textContent = botApagado ? "🤖 OFF" : "🤖 ON";
+  $("botGlobal").classList.toggle("apagado", botApagado);
+  $("avisoApagado").classList.toggle("oculto", !botApagado);
+}
+$("botGlobal").addEventListener("click", async () => {
+  const mensaje = botApagado
+    ? "¿Encender el bot? Volverá a responder automáticamente a todos los clientes."
+    : "¿Apagar el bot para TODOS los clientes? Nadie recibirá respuestas automáticas hasta que lo enciendas.";
+  if (!confirm(mensaje)) return;
+  try { await api({ accion: "bot_global", activo: botApagado }); await cargarConversaciones(); }
+  catch (e) { if (e.message !== "401") alert(e.message); }
+});
+
 // ---------- Chat ----------
 async function abrir(tel) {
   actual = tel; firmaMensajes = "";
@@ -212,6 +343,7 @@ async function abrir(tel) {
   $("app").classList.add("viendo-chat");
   $("mensajes").innerHTML = "";
   pintarLista();
+  pintarBanner();
   await cargarMensajes(true);
   $("texto").focus();
 }
@@ -288,7 +420,7 @@ function ajustarAlto() { const t = $("texto"); t.style.height = "auto"; t.style.
 $("texto").addEventListener("input", ajustarAlto);
 
 $("volver").addEventListener("click", () => {
-  actual = null; $("app").classList.remove("viendo-chat");
+  actual = null; pintarBanner(); $("app").classList.remove("viendo-chat");
   $("vistaChat").classList.add("oculto"); $("sinChat").classList.remove("oculto");
   pintarLista();
 });
