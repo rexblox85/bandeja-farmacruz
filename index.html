@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b6b5d">
+<title>Bandeja Farmacruz</title>
+<style>
+  :root {
+    --bg: #f0f2f5; --panel: #ffffff; --line: #e3e6ea; --text: #111b21; --muted: #667781;
+    --accent: #0b6b5d; --accent-2: #25d366; --chat-bg: #efeae2;
+    --in: #ffffff; --out-bot: #e7f0ee; --out-human: #d9fdd3; --warn-bg: #fff4d6; --warn: #7a5600;
+    --badge: #25d366; --danger: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b141a; --panel: #111b21; --line: #222d34; --text: #e9edef; --muted: #8696a0;
+      --accent: #00a884; --chat-bg: #0b141a; --in: #202c33; --out-bot: #1f3a35; --out-human: #005c4b;
+      --warn-bg: #3a2f12; --warn: #ffd27a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  .oculto { display: none !important; }
+
+  /* Ingreso */
+  #login { min-height: 100%; display: grid; place-items: center; padding: 16px; }
+  #login form { background: var(--panel); padding: 28px 24px; border-radius: 12px; width: 100%; max-width: 360px; box-shadow: 0 2px 12px rgb(0 0 0 / .08); }
+  #login h1 { margin: 0 0 4px; font-size: 22px; }
+  #login p { margin: 0 0 18px; color: var(--muted); }
+  #login input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 16px; }
+  #login button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; }
+  #loginError { color: var(--danger); min-height: 1.4em; margin-top: 8px; }
+
+  /* Diseño principal */
+  #app { height: 100%; display: grid; grid-template-columns: 360px minmax(0, 1fr); }
+  #lista, #chat { min-width: 0; overflow: hidden; }
+  .conv .fila > :first-child { min-width: 0; }
+  #lista { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  header.barra { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--accent); color: #fff; min-height: 58px; }
+  header.barra h2 { margin: 0; font-size: 17px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header.barra small { display: block; font-weight: 400; opacity: .85; font-size: 12px; }
+  header.barra button { background: transparent; border: 0; color: #fff; padding: 6px 8px; border-radius: 6px; }
+  #buscar { margin: 8px 12px; padding: 9px 12px; border-radius: 8px; border: 0; background: var(--bg); color: var(--text); }
+  #convs { flex: 1; overflow-y: auto; }
+  .conv { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .conv:hover, .conv.activa { background: var(--bg); }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; flex: none; }
+  .conv .info { flex: 1; min-width: 0; }
+  .conv .fila { display: flex; justify-content: space-between; gap: 8px; }
+  .conv .nombre { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv .hora { color: var(--muted); font-size: 12px; flex: none; }
+  .conv .ultimo { color: var(--muted); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { background: var(--badge); color: #fff; border-radius: 999px; font-size: 12px; padding: 1px 7px; font-weight: 700; flex: none; }
+  .etiqueta { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--warn-bg); color: var(--warn); margin-left: 4px; }
+  #vacio { color: var(--muted); text-align: center; padding: 40px 16px; }
+
+  #chat { display: flex; flex-direction: column; min-height: 0; background: var(--chat-bg); }
+  #sinChat { flex: 1; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 16px; }
+  #volver { display: none; }
+  #toggleBot { background: rgb(255 255 255 / .18) !important; font-size: 13px; white-space: nowrap; }
+  #mensajes { flex: 1; overflow-y: auto; padding: 16px 5%; display: flex; flex-direction: column; gap: 4px; }
+  .burbuja { max-width: 78%; padding: 7px 10px 5px; border-radius: 8px; box-shadow: 0 1px 1px rgb(0 0 0 / .08); white-space: pre-wrap; word-wrap: break-word; }
+  .burbuja.entrada { align-self: flex-start; background: var(--in); }
+  .burbuja.salida { align-self: flex-end; }
+  .burbuja.bot { background: var(--out-bot); }
+  .burbuja.humano { background: var(--out-human); }
+  .burbuja .meta { font-size: 11px; color: var(--muted); text-align: right; margin-top: 2px; }
+  .dia { align-self: center; background: var(--panel); color: var(--muted); font-size: 12px; padding: 3px 10px; border-radius: 6px; margin: 8px 0; }
+  #aviso { background: var(--warn-bg); color: var(--warn); padding: 8px 16px; font-size: 13.5px; }
+  form#enviar { display: flex; gap: 8px; padding: 10px 12px; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  #texto { flex: 1; resize: none; border: 0; border-radius: 20px; padding: 10px 14px; background: var(--bg); color: var(--text); font: inherit; max-height: 140px; }
+  #btnEnviar { border: 0; background: var(--accent); color: #fff; border-radius: 50%; width: 44px; height: 44px; flex: none; font-size: 18px; }
+  #btnEnviar:disabled { opacity: .5; cursor: default; }
+
+  @media (max-width: 760px) {
+    #app { grid-template-columns: minmax(0, 1fr); }
+    #app.viendo-chat #lista { display: none; }
+    #app:not(.viendo-chat) #chat { display: none; }
+    #volver { display: inline-block; }
+    #mensajes { padding: 12px 10px; }
+    .burbuja { max-width: 88%; }
+  }
+</style>
+</head>
+<body>
+
+<section id="login">
+  <form id="formLogin">
+    <h1>💊 Bandeja Farmacruz</h1>
+    <p>Conversaciones del bot de WhatsApp</p>
+    <input id="clave" type="password" autocomplete="current-password" placeholder="Clave de la bandeja" required>
+    <button type="submit">Entrar</button>
+    <div id="loginError"></div>
+  </form>
+</section>
+
+<main id="app" class="oculto">
+  <aside id="lista">
+    <header class="barra">
+      <h2>Farmacruz<small id="estadoConexion">Conectado</small></h2>
+      <button id="salir" title="Cerrar sesión">Salir</button>
+    </header>
+    <input id="buscar" type="search" placeholder="Buscar por nombre o número">
+    <div id="convs"></div>
+    <div id="vacio" class="oculto">Todavía no hay conversaciones.</div>
+  </aside>
+
+  <section id="chat">
+    <div id="sinChat">Elige una conversación para ver los mensajes y responder.</div>
+    <div id="vistaChat" class="oculto" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <header class="barra">
+        <button id="volver" aria-label="Volver">←</button>
+        <h2 id="chatNombre">—<small id="chatTel"></small></h2>
+        <button id="toggleBot"></button>
+      </header>
+      <div id="mensajes"></div>
+      <div id="aviso" class="oculto"></div>
+      <form id="enviar">
+        <textarea id="texto" rows="1" placeholder="Escribe una respuesta…"></textarea>
+        <button id="btnEnviar" type="submit" aria-label="Enviar">➤</button>
+      </form>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = "https://mzzsrbgepblfueemebsl.supabase.co/functions/v1/bandeja";
+const $ = (id) => document.getElementById(id);
+const store = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+  del: (k) => { try { localStorage.removeItem(k); } catch {} },
+};
+
+let clave = store.get("bandeja_clave") || "";
+let conversaciones = [];
+let actual = null;          // teléfono abierto
+let estadoBot = null;       // fecha hasta la que está pausado
+let ultimaEntrada = null;
+let firmaMensajes = "";
+
+async function api(cuerpo) {
+  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json", "x-clave": clave }, body: JSON.stringify(cuerpo) });
+  const datos = await r.json().catch(() => ({}));
+  if (r.status === 401) { cerrarSesion("Clave incorrecta"); throw new Error("401"); }
+  if (!r.ok) throw new Error(datos.error || "Error " + r.status);
+  return datos;
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Negritas e itálicas estilo WhatsApp
+const formato = (s) => esc(s).replace(/\*([^*\n]+)\*/g, "<b>$1</b>").replace(/(^|\s)_([^_\n]+)_/g, "$1<i>$2</i>");
+const fmtTel = (t) => "+" + t;
+const hora = (f) => new Date(f).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" });
+function cuando(f) {
+  const d = new Date(f), hoy = new Date();
+  if (d.toDateString() === hoy.toDateString()) return hora(f);
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === ayer.toDateString()) return "Ayer";
+  return d.toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit" });
+}
+const inicial = (c) => (c.nombre || "?").trim().charAt(0).toUpperCase() || "#";
+
+// ---------- Lista de conversaciones ----------
+async function cargarConversaciones() {
+  try {
+    const { conversaciones: lista } = await api({ accion: "conversaciones" });
+    conversaciones = lista;
+    $("estadoConexion").textContent = "Actualizado " + hora(new Date());
+    pintarLista();
+    const sinLeer = lista.reduce((n, c) => n + Number(c.no_leidos || 0), 0);
+    document.title = (sinLeer ? `(${sinLeer}) ` : "") + "Bandeja Farmacruz";
+  } catch (e) {
+    if (e.message !== "401") $("estadoConexion").textContent = "Sin conexión, reintentando…";
+  }
+}
+
+function pintarLista() {
+  const q = $("buscar").value.toLowerCase().trim();
+  const lista = conversaciones.filter((c) => !q || (c.nombre || "").toLowerCase().includes(q) || c.telefono.includes(q.replace(/\D/g, "") || "~"));
+  $("vacio").classList.toggle("oculto", conversaciones.length > 0);
+  $("convs").innerHTML = lista.map((c) => {
+    const pausado = c.bot_pausado_hasta && new Date(c.bot_pausado_hasta) > new Date();
+    const pref = c.autor === "bot" ? "🤖 " : c.autor === "humano" ? "✔ " : "";
+    return `<div class="conv ${c.telefono === actual ? "activa" : ""}" data-tel="${esc(c.telefono)}">
+      <div class="avatar">${esc(inicial(c))}</div>
+      <div class="info">
+        <div class="fila"><span class="nombre">${esc(c.nombre || fmtTel(c.telefono))}${pausado ? '<span class="etiqueta">bot en pausa</span>' : ""}</span><span class="hora">${cuando(c.fecha)}</span></div>
+        <div class="fila"><span class="ultimo">${esc(pref + String(c.ultimo).replace(/[*_]/g, "").replace(/\s+/g, " "))}</span>${Number(c.no_leidos) ? `<span class="badge">${c.no_leidos}</span>` : ""}</div>
+      </div></div>`;
+  }).join("");
+}
+
+$("convs").addEventListener("click", (e) => {
+  const el = e.target.closest(".conv");
+  if (el) abrir(el.dataset.tel);
+});
+$("buscar").addEventListener("input", pintarLista);
+
+// ---------- Chat ----------
+async function abrir(tel) {
+  actual = tel; firmaMensajes = "";
+  const c = conversaciones.find((x) => x.telefono === tel) || {};
+  $("chatNombre").firstChild.textContent = c.nombre || fmtTel(tel);
+  $("chatTel").textContent = c.nombre ? fmtTel(tel) : "";
+  $("sinChat").classList.add("oculto");
+  $("vistaChat").classList.remove("oculto");
+  $("app").classList.add("viendo-chat");
+  $("mensajes").innerHTML = "";
+  pintarLista();
+  await cargarMensajes(true);
+  $("texto").focus();
+}
+
+async function cargarMensajes(bajar) {
+  if (!actual) return;
+  const tel = actual;
+  try {
+    const d = await api({ accion: "mensajes", telefono: tel });
+    if (tel !== actual) return;
+    estadoBot = d.bot_pausado_hasta;
+    const entradas = d.mensajes.filter((m) => m.direccion === "entrada");
+    ultimaEntrada = entradas.length ? entradas[entradas.length - 1].creado : null;
+    pintarEstado();
+    const firma = d.mensajes.length + ":" + (d.mensajes.at(-1)?.id ?? "");
+    if (firma === firmaMensajes) return;
+    firmaMensajes = firma;
+    const cont = $("mensajes");
+    const cercaDelFinal = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 120;
+    let dia = "";
+    cont.innerHTML = d.mensajes.map((m) => {
+      const dd = new Date(m.creado).toLocaleDateString("es-VE", { weekday: "long", day: "numeric", month: "long" });
+      const sep = dd !== dia ? `<div class="dia">${esc(dd)}</div>` : "";
+      dia = dd;
+      const quien = m.autor === "bot" ? "🤖 Bot · " : m.autor === "humano" ? "Tú · " : "";
+      return `${sep}<div class="burbuja ${m.direccion} ${m.autor}">${formato(m.texto)}<div class="meta">${quien}${hora(m.creado)}</div></div>`;
+    }).join("");
+    if (bajar || cercaDelFinal) cont.scrollTop = cont.scrollHeight;
+  } catch {}
+}
+
+function pintarEstado() {
+  const pausado = estadoBot && new Date(estadoBot) > new Date();
+  $("toggleBot").textContent = pausado ? "▶ Activar bot" : "⏸ Pausar bot";
+  $("toggleBot").title = pausado ? "El bot está callado con este cliente hasta las " + hora(estadoBot) : "El bot está respondiendo a este cliente";
+  const vencido = !ultimaEntrada || Date.now() - new Date(ultimaEntrada).getTime() > 24 * 3600e3;
+  const aviso = $("aviso");
+  if (vencido) {
+    aviso.textContent = "Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite escribirle hasta que vuelva a escribir.";
+  } else if (pausado) {
+    aviso.textContent = "🤫 Lo estás atendiendo tú: el bot no le responderá a este cliente hasta las " + hora(estadoBot);
+  }
+  aviso.classList.toggle("oculto", !vencido && !pausado);
+  $("texto").disabled = vencido;
+  $("btnEnviar").disabled = vencido;
+}
+
+$("toggleBot").addEventListener("click", async () => {
+  const pausado = estadoBot && new Date(estadoBot) > new Date();
+  try {
+    await api({ accion: "bot", telefono: actual, activo: pausado });
+    await cargarMensajes(); await cargarConversaciones();
+  } catch (e) { if (e.message !== "401") alert(e.message); }
+});
+
+$("enviar").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const texto = $("texto").value.trim();
+  if (!texto || !actual) return;
+  $("btnEnviar").disabled = true;
+  try {
+    await api({ accion: "enviar", telefono: actual, texto });
+    $("texto").value = ""; ajustarAlto();
+    await cargarMensajes(true); await cargarConversaciones();
+  } catch (err) {
+    if (err.message !== "401") alert("No se pudo enviar: " + err.message);
+  } finally { $("btnEnviar").disabled = false; $("texto").focus(); }
+});
+// Enter envía, Shift+Enter hace salto de línea (en computadora)
+$("texto").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !matchMedia("(pointer: coarse)").matches) { e.preventDefault(); $("enviar").requestSubmit(); }
+});
+function ajustarAlto() { const t = $("texto"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }
+$("texto").addEventListener("input", ajustarAlto);
+
+$("volver").addEventListener("click", () => {
+  actual = null; $("app").classList.remove("viendo-chat");
+  $("vistaChat").classList.add("oculto"); $("sinChat").classList.remove("oculto");
+  pintarLista();
+});
+
+// ---------- Sesión ----------
+function cerrarSesion(msg) {
+  clave = ""; store.del("bandeja_clave");
+  $("app").classList.add("oculto"); $("login").classList.remove("oculto");
+  $("loginError").textContent = msg || "";
+}
+$("salir").addEventListener("click", () => cerrarSesion());
+$("formLogin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clave = $("clave").value.trim();
+  $("loginError").textContent = "Verificando…";
+  try {
+    await api({ accion: "conversaciones" });
+    store.set("bandeja_clave", clave);
+    iniciar();
+  } catch (err) { if (err.message !== "401") $("loginError").textContent = "No pude conectar: " + err.message; }
+});
+
+let timer;
+function iniciar() {
+  $("login").classList.add("oculto"); $("app").classList.remove("oculto");
+  $("loginError").textContent = ""; $("clave").value = "";
+  cargarConversaciones();
+  clearInterval(timer);
+  timer = setInterval(() => { if (!document.hidden) { cargarConversaciones(); cargarMensajes(); } }, 5000);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && clave) { cargarConversaciones(); cargarMensajes(); } });
+
+if (clave) iniciar();
+</script>
+</body>
+</html>
